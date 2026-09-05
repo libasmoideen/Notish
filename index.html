@@ -73,10 +73,10 @@
 
   .bar-item{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-size:12.5px;}
   .bar-icon{font-size:14px;width:20px;text-align:center;flex-shrink:0;}
-  .bar-label{width:76px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bar-label{width:64px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .bar-track{flex:1;background:var(--purple-light);border-radius:4px;height:14px;overflow:hidden;}
   .bar-fill{height:100%;border-radius:4px;}
-  .bar-value{width:74px;flex-shrink:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;}
+  .bar-value{width:100px;flex-shrink:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;font-size:11.5px;}
 
   .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom));z-index:10;max-width:520px;margin:0 auto;}
   .tabbarItem{display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;font-family:inherit;color:var(--sub);font-size:10.5px;font-weight:600;cursor:pointer;padding:4px 10px;flex:1;}
@@ -113,6 +113,9 @@ const CATEGORIES = [
   { key:"Gym", emoji:"🏋️", color:"#2E9E6B" },
   { key:"Cinema", emoji:"🎬", color:"#B5457C" },
   { key:"Travelling", emoji:"✈️", color:"#2E8FA3" },
+  { key:"Scooter", emoji:"🛵", color:"#3F8E7A" },
+  { key:"Car", emoji:"🚗", color:"#4A5FBF" },
+  { key:"Bus fare", emoji:"🚌", color:"#B0762E" },
   { key:"Personal Care", emoji:"🧴", color:"#C97AA8" },
   { key:"Education", emoji:"🎓", color:"#4F6BB0" },
   { key:"EMIs", emoji:"💳", color:"#6B5B3E" },
@@ -150,6 +153,7 @@ let state = {
   formError: "",
   saveError: false,
   filterCategory: "All",
+  filterNote: "",
   filterFrom: (()=>{ const d=new Date(); d.setDate(d.getDate()-6); return d.toISOString().slice(0,10); })(),
   filterTo: todayStr(),
   filterApplied: false,
@@ -211,9 +215,11 @@ function byMonthOfYear(list){
 }
 function applyFilter(){ state.filterApplied = true; render(); }
 function getFilteredEntries(){
+  const q = (state.filterNote||"").trim().toLowerCase();
   return state.entries.filter(en=>{
     if(state.filterCategory !== "All" && en.category !== state.filterCategory) return false;
     if(en.date < state.filterFrom || en.date > state.filterTo) return false;
+    if(q && !(en.note||"").toLowerCase().includes(q)) return false;
     return true;
   }).sort((a,b)=> a.date < b.date ? 1 : (a.date>b.date?-1:(a.id<b.id?1:-1)));
 }
@@ -247,15 +253,16 @@ function renderEntryRows(list){
   }).join("");
 }
 
-function renderBarChart(data, defaultColor){
+function renderBarChart(data, defaultColor, totalOverride){
   if(data.length===0) return '<div class="empty">Nothing to show yet.</div>';
   const max = Math.max(1, ...data.map(d=>d.value));
+  const total = (totalOverride!=null && totalOverride>0) ? totalOverride : (data.reduce((s,d)=>s+d.value,0) || 1);
   return data.map(d => `
     <div class="bar-item">
       ${d.emoji ? `<span class="bar-icon">${d.emoji}</span>` : ""}
       <span class="bar-label">${esc(d.name)}</span>
       <span class="bar-track"><span class="bar-fill" style="width:${(d.value/max*100).toFixed(1)}%;background:${d.color||defaultColor}"></span></span>
-      <span class="bar-value">${fmt(d.value)}</span>
+      <span class="bar-value">${fmt(d.value)} (${((d.value/total)*100).toFixed(1)}%)</span>
     </div>`).join("");
 }
 
@@ -328,7 +335,7 @@ function render(){
       ${dayCat.length ? `
       <div class="section">
         <div class="sectionTitle">Breakdown</div>
-        <div class="card">${renderBarChart(dayCat)}</div>
+        <div class="card">${renderBarChart(dayCat, undefined, dayTotal)}</div>
       </div>` : ""}
     `;
   } else if(state.view === "month"){
@@ -343,7 +350,7 @@ function render(){
       </div>
       <div class="section">
         <div class="sectionTitle">By category</div>
-        <div class="card">${renderBarChart(monthCat)}</div>
+        <div class="card">${renderBarChart(monthCat, undefined, monthTotal)}</div>
       </div>
     `;
   } else if(state.view === "year"){
@@ -358,11 +365,11 @@ function render(){
       </div>
       <div class="section">
         <div class="sectionTitle">By month</div>
-        <div class="card">${renderBarChart(yearMonthly, "#7C3DEA")}</div>
+        <div class="card">${renderBarChart(yearMonthly, "#7C3DEA", yearTotal)}</div>
       </div>
       <div class="section">
         <div class="sectionTitle">By category</div>
-        <div class="card">${renderBarChart(yearCat)}</div>
+        <div class="card">${renderBarChart(yearCat, undefined, yearTotal)}</div>
       </div>
     `;
   } else if(state.view === "filter"){
@@ -380,6 +387,10 @@ function render(){
                 ${CATEGORIES.map(c=>`<option value="${c.key}" ${state.filterCategory===c.key?"selected":""}>${c.emoji} ${c.key}</option>`).join("")}
               </select>
             </div>
+            <div>
+              <div class="filterLbl">Note contains</div>
+              <input type="text" placeholder="e.g. lunch, cab, recharge" value="${esc(state.filterNote)}" onchange="state.filterNote=this.value">
+            </div>
             <div class="filterRange">
               <div>
                 <div class="filterLbl">From</div>
@@ -394,7 +405,7 @@ function render(){
           </div>
           ${state.filterApplied ? `
             <div class="resultBand">
-              <div class="resultLabel">${state.filterCategory==="All" ? "All categories" : state.filterCategory} \u00b7 ${state.filterFrom} to ${state.filterTo}</div>
+              <div class="resultLabel">${state.filterCategory==="All" ? "All categories" : state.filterCategory}${state.filterNote ? " \u00b7 note: \u201c"+esc(state.filterNote)+"\u201d" : ""} \u00b7 ${state.filterFrom} to ${state.filterTo}</div>
               <div class="resultNumber">${fmt(total)}</div>
             </div>
           ` : ""}
