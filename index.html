@@ -24,7 +24,9 @@
 
   .topbar{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;background:linear-gradient(135deg,var(--purple),var(--purple-dark));color:#fff;position:sticky;top:0;z-index:5;}
   .topbar img{width:34px;height:34px;border-radius:9px;}
+  .brandBlock{display:flex;flex-direction:column;line-height:1.1;}
   .topbar .name{font-size:19px;font-weight:800;letter-spacing:.2px;}
+  .topbar .tagline{font-size:11px;font-weight:500;opacity:.8;text-transform:lowercase;margin-top:1px;}
 
   .totalBand{margin:14px 16px 6px;background:linear-gradient(135deg,var(--purple),var(--purple-dark));color:#fff;border-radius:16px;padding:18px 20px;box-shadow:0 8px 20px -8px rgba(124,61,234,.55);}
   .totalLabel{font-size:12.5px;opacity:.85;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;}
@@ -120,6 +122,8 @@ const CATEGORIES = [
   { key:"Education", emoji:"🎓", color:"#4F6BB0" },
   { key:"EMIs", emoji:"💳", color:"#6B5B3E" },
   { key:"Online Purchase", emoji:"🛒", color:"#E0A63B" },
+  { key:"Games & Hobbies", emoji:"🎮", color:"#5B7FBF" },
+  { key:"Savings", emoji:"💰", color:"#3F9E6B" },
   { key:"Other", emoji:"📦", color:"#7A7A7A" },
 ];
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -422,7 +426,10 @@ function render(){
   app.innerHTML = `
     <div class="topbar">
       <img src="icon-192.png" alt="Notish logo">
-      <span class="name">Notish</span>
+      <div class="brandBlock">
+        <span class="name">Notish</span>
+        ${state.view==="day" ? '<span class="tagline">spend smart</span>' : ""}
+      </div>
     </div>
     ${state.saveError ? '<div class="errorBanner">Could not save. Your browser storage may be full or blocked.</div>' : ""}
     <div id="installBanner" class="installBanner">
