@@ -40,9 +40,10 @@
   input, select{padding:11px 12px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--ink);font-size:16px;font-family:inherit;min-width:0;width:100%;}
   input:focus, select:focus{outline:none;border-color:var(--purple);}
 
-  .amountRow{display:flex;align-items:center;gap:8px;}
-  .amountRow .rupee{font-size:22px;font-weight:800;color:var(--purple);}
-  .amountRow input{font-size:22px;font-weight:700;border:none;padding:6px 0;}
+  .amountRow{display:flex;align-items:center;gap:10px;border:2px solid var(--purple);border-radius:12px;padding:10px 14px;background:var(--purple-light);}
+  .amountRow .rupee{font-size:24px;font-weight:800;color:var(--purple);}
+  .amountRow input{font-size:24px;font-weight:700;border:none;padding:6px 0;background:transparent;flex:1;}
+  .amountHint{font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.4px;margin-bottom:6px;}
 
   .catGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px;}
   .catBtn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border-radius:12px;border:1.5px solid var(--line);background:#fff;cursor:pointer;font-family:inherit;}
@@ -114,7 +115,7 @@ const CATEGORIES = [
   { key:"Hospital", emoji:"🏥", color:"#D9455F" },
   { key:"Gym", emoji:"🏋️", color:"#2E9E6B" },
   { key:"Cinema", emoji:"🎬", color:"#B5457C" },
-  { key:"Travelling", emoji:"✈️", color:"#2E8FA3" },
+  { key:"Groceries", emoji:"🧺", color:"#3F8E5E" },
   { key:"Scooter", emoji:"🛵", color:"#3F8E7A" },
   { key:"Car", emoji:"🚗", color:"#4A5FBF" },
   { key:"Bus fare", emoji:"🚌", color:"#B0762E" },
@@ -123,7 +124,6 @@ const CATEGORIES = [
   { key:"EMIs", emoji:"💳", color:"#6B5B3E" },
   { key:"Online Purchase", emoji:"🛒", color:"#E0A63B" },
   { key:"Games & Hobbies", emoji:"🎮", color:"#5B7FBF" },
-  { key:"Savings", emoji:"💰", color:"#3F9E6B" },
   { key:"Other", emoji:"📦", color:"#7A7A7A" },
 ];
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -273,6 +273,7 @@ function renderBarChart(data, defaultColor, totalOverride){
 function renderAddForm(){
   return `
     <div class="card">
+      <div class="amountHint">ENTER AMOUNT</div>
       <div class="amountRow">
         <span class="rupee">\u20B9</span>
         <input type="number" inputmode="decimal" placeholder="0" id="amountInput" step="0.01" min="0" value="${esc(state.amount)}" oninput="updateAmount(this.value)">
@@ -428,7 +429,7 @@ function render(){
       <img src="icon-192.png" alt="Notish logo">
       <div class="brandBlock">
         <span class="name">Notish</span>
-        ${state.view==="day" ? '<span class="tagline">spend smart</span>' : ""}
+        ${state.view==="day" ? '<span class="tagline">simply clever</span>' : ""}
       </div>
     </div>
     ${state.saveError ? '<div class="errorBanner">Could not save. Your browser storage may be full or blocked.</div>' : ""}
