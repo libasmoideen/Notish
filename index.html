@@ -127,6 +127,7 @@ const CATEGORIES = [
 ];
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const STORAGE_KEY = "notish_entries_v1";
+const EARNINGS_STORAGE_KEY = "notish_earnings_v1";
 
 function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[CATEGORIES.length-1]; }
 function fmt(n){ return "\u20B9" + Number(n||0).toLocaleString("en-IN",{maximumFractionDigits:2}); }
@@ -142,9 +143,18 @@ function saveEntries(entries){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); return true; }
   catch(e){ return false; }
 }
+function loadEarnings(){
+  try{ const raw = localStorage.getItem(EARNINGS_STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
+  catch(e){ return {}; }
+}
+function saveEarnings(earnings){
+  try{ localStorage.setItem(EARNINGS_STORAGE_KEY, JSON.stringify(earnings)); return true; }
+  catch(e){ return false; }
+}
 
 let state = {
   entries: loadEntries(),
+  earnings: loadEarnings(),
   view: "day",
   selectedDate: todayStr(),
   knownToday: todayStr(),
@@ -198,6 +208,18 @@ function setView(v){ state.view = v; state.formError=""; render(); }
 function selectCategory(key){ state.category = key; state.formError=""; render(); }
 function updateAmount(v){ state.amount = v; }
 function updateNote(v){ state.note = v; }
+function getEarningsNum(date){ return parseFloat(state.earnings[date]) || 0; }
+function updateEarnings(v){
+  state.earnings[todayStr()] = v;
+  saveEarnings(state.earnings);
+}
+function getOpeningBalance(date){
+  let earn = 0;
+  Object.keys(state.earnings).forEach(d=>{ if(d < date) earn += getEarningsNum(d); });
+  let exp = 0;
+  state.entries.forEach(en=>{ if(en.date < date) exp += en.amount; });
+  return earn - exp;
+}
 
 function getDayEntries(){ return state.entries.filter(en=>en.date===state.selectedDate).sort((a,b)=> a.id<b.id?1:-1); }
 function getMonthEntries(){
@@ -342,6 +364,37 @@ function render(){
         <div class="card">${renderBarChart(dayCat, undefined, dayTotal)}</div>
       </div>` : ""}
     `;
+  } else if(state.view === "summary"){
+    const todayD = todayStr();
+    const openingBalance = getOpeningBalance(todayD);
+    const todaysEarningsRaw = state.earnings[todayD] || "";
+    const todayEntries = state.entries.filter(en=>en.date===todayD);
+    const todayExpenseTotal = todayEntries.reduce((s,en)=>s+en.amount,0);
+    const closingBalance = openingBalance + getEarningsNum(todayD) - todayExpenseTotal;
+    content = `
+      <div class="section">
+        <div class="sectionTitle">Opening Balance</div>
+        <div class="totalBand">
+          <div class="totalNumber">${fmt(openingBalance)}</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Today's Earnings</div>
+        <div class="card">
+          <div class="amountHint">ENTER EARNINGS</div>
+          <div class="amountRow">
+            <span class="rupee">\u20B9</span>
+            <input type="number" inputmode="decimal" placeholder="0" id="earningsInput" step="0.01" min="0" value="${esc(todaysEarningsRaw)}" oninput="updateEarnings(this.value)" onchange="render()">
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Closing Balance</div>
+        <div class="totalBand">
+          <div class="totalNumber">${fmt(closingBalance)}</div>
+        </div>
+      </div>
+    `;
   } else if(state.view === "month"){
     content = `
       <div class="totalBand" style="margin-top:14px;">
@@ -439,6 +492,7 @@ function render(){
     ${content}
     <div class="tabbar">
       <button class="tabbarItem ${state.view==='day'?'active':''}" onclick="setView('day')"><span class="ic">\ud83d\udcdd</span>Day</button>
+      <button class="tabbarItem ${state.view==='summary'?'active':''}" onclick="setView('summary')"><span class="ic">\ud83d\udcb0</span>Summary</button>
       <button class="tabbarItem ${state.view==='month'?'active':''}" onclick="setView('month')"><span class="ic">\ud83d\udcc6</span>Month</button>
       <button class="tabbarItem ${state.view==='year'?'active':''}" onclick="setView('year')"><span class="ic">\ud83d\udcca</span>Year</button>
       <button class="tabbarItem ${state.view==='filter'?'active':''}" onclick="setView('filter')"><span class="ic">\ud83d\udd0d</span>Filter</button>
