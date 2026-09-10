@@ -54,6 +54,7 @@
 
   .noteRow{margin-top:12px;}
   .addBtn{width:100%;margin-top:14px;padding:13px;border-radius:12px;border:none;background:var(--purple);color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
+  .removeEarningsBtn{width:100%;margin-top:10px;padding:10px;border-radius:10px;border:1.5px solid var(--red);background:#fff;color:var(--red);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
   .addBtn:disabled{opacity:.45;}
   .formError{color:var(--red);font-size:12.5px;margin-top:8px;}
 
@@ -157,6 +158,7 @@ let state = {
   earnings: loadEarnings(),
   view: "day",
   selectedDate: todayStr(),
+  summaryDate: todayStr(),
   knownToday: todayStr(),
   monthCursor: (()=>{ const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })(),
   yearCursor: new Date().getFullYear(),
@@ -198,6 +200,13 @@ function shiftDay(delta){
   render();
 }
 function jumpToDate(v){ state.selectedDate = v; render(); }
+function shiftSummaryDay(delta){
+  const d = new Date(state.summaryDate+"T00:00:00");
+  d.setDate(d.getDate()+delta);
+  state.summaryDate = d.toISOString().slice(0,10);
+  render();
+}
+function jumpSummaryDate(v){ state.summaryDate = v; render(); }
 function shiftMonth(delta){
   let m = state.monthCursor.m + delta, y = state.monthCursor.y;
   if(m<0){ m=11; y-=1; } if(m>11){ m=0; y+=1; }
@@ -210,8 +219,13 @@ function updateAmount(v){ state.amount = v; }
 function updateNote(v){ state.note = v; }
 function getEarningsNum(date){ return parseFloat(state.earnings[date]) || 0; }
 function updateEarnings(v){
-  state.earnings[todayStr()] = v;
+  state.earnings[state.summaryDate] = v;
   saveEarnings(state.earnings);
+}
+function removeEarnings(date){
+  delete state.earnings[date];
+  saveEarnings(state.earnings);
+  render();
 }
 function getOpeningBalance(date){
   let earn = 0;
@@ -365,27 +379,41 @@ function render(){
       </div>` : ""}
     `;
   } else if(state.view === "summary"){
-    const todayD = todayStr();
-    const openingBalance = getOpeningBalance(todayD);
-    const todaysEarningsRaw = state.earnings[todayD] || "";
-    const todayEntries = state.entries.filter(en=>en.date===todayD);
-    const todayExpenseTotal = todayEntries.reduce((s,en)=>s+en.amount,0);
-    const closingBalance = openingBalance + getEarningsNum(todayD) - todayExpenseTotal;
+    const summaryD = state.summaryDate;
+    const openingBalance = getOpeningBalance(summaryD);
+    const summaryEarningsRaw = state.earnings[summaryD] || "";
+    const summaryEntries = state.entries.filter(en=>en.date===summaryD);
+    const summaryExpenseTotal = summaryEntries.reduce((s,en)=>s+en.amount,0);
+    const closingBalance = openingBalance + getEarningsNum(summaryD) - summaryExpenseTotal;
+    const summaryIsToday = summaryD === todayStr();
+    const summaryDateLabel = new Date(summaryD+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
     content = `
       <div class="section">
-        <div class="sectionTitle">Opening Balance</div>
+        <div class="dateNav">
+          <button class="navBtn" onclick="shiftSummaryDay(-1)">&#8249; Prev</button>
+          <div class="navCenter">
+            <input type="date" class="jumpDate" value="${summaryD}" onchange="jumpSummaryDate(this.value)" style="border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);text-decoration:none;">
+          </div>
+          <button class="navBtn" onclick="shiftSummaryDay(1)">Next &#8250;</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Opening Balance ${summaryIsToday ? "" : "\u2014 " + esc(summaryDateLabel)}</div>
         <div class="totalBand">
           <div class="totalNumber">${fmt(openingBalance)}</div>
         </div>
       </div>
       <div class="section">
-        <div class="sectionTitle">Today's Earnings</div>
+        <div class="sectionTitle">${summaryIsToday ? "Today's" : esc(summaryDateLabel) + "\u2019s"} Earnings</div>
         <div class="card">
           <div class="amountHint">ENTER EARNINGS</div>
           <div class="amountRow">
             <span class="rupee">\u20B9</span>
-            <input type="number" inputmode="decimal" placeholder="0" id="earningsInput" step="0.01" min="0" value="${esc(todaysEarningsRaw)}" oninput="updateEarnings(this.value)" onchange="render()">
+            <input type="number" inputmode="decimal" placeholder="0" id="earningsInput" step="0.01" min="0" value="${esc(summaryEarningsRaw)}" oninput="updateEarnings(this.value)" onchange="render()">
           </div>
+          ${(summaryD in state.earnings && state.earnings[summaryD] !== "") ? `
+          <button type="button" class="removeEarningsBtn" onclick="removeEarnings('${summaryD}')">Remove earnings for this date</button>
+          ` : ""}
         </div>
       </div>
       <div class="section">
