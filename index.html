@@ -53,8 +53,7 @@
   .catBtn.active .lbl{color:var(--purple-dark);}
 
   .noteRow{margin-top:12px;}
-  .addBtn{width:100%;margin-top:0;padding:13px;border-radius:12px;border:none;background:var(--purple);color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
-  .earningsCard .amountHint{margin-bottom:6px;}
+  .addBtn{width:100%;margin-top:14px;padding:13px;border-radius:12px;border:none;background:var(--purple);color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
   .addBtn:disabled{opacity:.45;}
   .formError{color:var(--red);font-size:12.5px;margin-top:8px;}
 
@@ -128,7 +127,6 @@ const CATEGORIES = [
 ];
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const STORAGE_KEY = "notish_entries_v1";
-const EARNINGS_STORAGE_KEY = "notish_earnings_v1";
 
 function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[CATEGORIES.length-1]; }
 function fmt(n){ return "\u20B9" + Number(n||0).toLocaleString("en-IN",{maximumFractionDigits:2}); }
@@ -144,18 +142,9 @@ function saveEntries(entries){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); return true; }
   catch(e){ return false; }
 }
-function loadEarnings(){
-  try{ const raw = localStorage.getItem(EARNINGS_STORAGE_KEY); return raw ? JSON.parse(raw) : {}; }
-  catch(e){ return {}; }
-}
-function saveEarnings(earnings){
-  try{ localStorage.setItem(EARNINGS_STORAGE_KEY, JSON.stringify(earnings)); return true; }
-  catch(e){ return false; }
-}
 
 let state = {
   entries: loadEntries(),
-  earnings: loadEarnings(),
   view: "day",
   selectedDate: todayStr(),
   knownToday: todayStr(),
@@ -209,18 +198,6 @@ function setView(v){ state.view = v; state.formError=""; render(); }
 function selectCategory(key){ state.category = key; state.formError=""; render(); }
 function updateAmount(v){ state.amount = v; }
 function updateNote(v){ state.note = v; }
-function getEarningsNum(date){ return parseFloat(state.earnings[date]) || 0; }
-function updateEarnings(v){
-  state.earnings[state.selectedDate] = v;
-  saveEarnings(state.earnings);
-}
-function getOpeningBalance(date){
-  let earn = 0;
-  Object.keys(state.earnings).forEach(d=>{ if(d < date) earn += getEarningsNum(d); });
-  let exp = 0;
-  state.entries.forEach(en=>{ if(en.date < date) exp += en.amount; });
-  return earn - exp;
-}
 
 function getDayEntries(){ return state.entries.filter(en=>en.date===state.selectedDate).sort((a,b)=> a.id<b.id?1:-1); }
 function getMonthEntries(){
@@ -295,8 +272,7 @@ function renderBarChart(data, defaultColor, totalOverride){
 function renderAddForm(){
   return `
     <div class="card">
-      <button class="addBtn" onclick="addEntry()">Expense</button>
-      <div class="amountHint" style="margin-top:14px;">ENTER AMOUNT</div>
+      <div class="amountHint">ENTER AMOUNT</div>
       <div class="amountRow">
         <span class="rupee">\u20B9</span>
         <input type="number" inputmode="decimal" placeholder="0" id="amountInput" step="0.01" min="0" value="${esc(state.amount)}" oninput="updateAmount(this.value)">
@@ -312,6 +288,7 @@ function renderAddForm(){
         <input type="text" placeholder="Add a note (optional)" id="noteInput" value="${esc(state.note)}" oninput="updateNote(this.value)">
       </div>
       ${state.formError ? `<div class="formError">${esc(state.formError)}</div>` : ""}
+      <button class="addBtn" onclick="addEntry()">Add expense</button>
     </div>
   `;
 }
@@ -337,26 +314,7 @@ function render(){
   let content = "";
 
   if(state.view === "day"){
-    const openingBalance = getOpeningBalance(state.selectedDate);
-    const todaysEarningsRaw = state.earnings[state.selectedDate] || "";
-    const closingBalance = openingBalance + getEarningsNum(state.selectedDate) - dayTotal;
     content = `
-      <div class="section">
-        <div class="sectionTitle">Opening Balance</div>
-        <div class="totalBand">
-          <div class="totalNumber">${fmt(openingBalance)}</div>
-        </div>
-      </div>
-      <div class="section">
-        <div class="sectionTitle">Today's Earnings</div>
-        <div class="card earningsCard">
-          <div class="amountHint">ENTER EARNINGS</div>
-          <div class="amountRow">
-            <span class="rupee">\u20B9</span>
-            <input type="number" inputmode="decimal" placeholder="0" id="earningsInput" step="0.01" min="0" value="${esc(todaysEarningsRaw)}" oninput="updateEarnings(this.value)" onchange="render()">
-          </div>
-        </div>
-      </div>
       <div class="section">
         <div class="sectionTitle">Add expense</div>
         ${renderAddForm()}
@@ -383,12 +341,6 @@ function render(){
         <div class="sectionTitle">Breakdown</div>
         <div class="card">${renderBarChart(dayCat, undefined, dayTotal)}</div>
       </div>` : ""}
-      <div class="section">
-        <div class="sectionTitle">Closing Balance</div>
-        <div class="totalBand">
-          <div class="totalNumber">${fmt(closingBalance)}</div>
-        </div>
-      </div>
     `;
   } else if(state.view === "month"){
     content = `
