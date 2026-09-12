@@ -116,6 +116,42 @@
   .errorBanner{background:#FDECEF;color:var(--red);border:1px solid var(--red);border-radius:10px;padding:10px 12px;font-size:13px;margin:14px 16px 0;}
   .installBanner{display:none;align-items:center;justify-content:space-between;gap:10px;background:var(--purple-light);border:1px solid var(--purple);border-radius:12px;padding:11px 14px;font-size:12.5px;margin:14px 16px 0;color:var(--purple-dark);}
   .installBanner button{background:var(--purple);color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12.5px;font-family:inherit;font-weight:700;cursor:pointer;}
+
+  .topbar{position:relative;}
+  .topbarRight{margin-left:auto;position:relative;display:flex;align-items:center;}
+  .menuBtn{background:rgba(255,255,255,.16);border:none;border-radius:9px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-size:19px;line-height:1;}
+  .menuDropdown{position:absolute;top:46px;right:0;background:#fff;border-radius:12px;box-shadow:0 10px 30px -8px rgba(35,27,51,.35);border:1px solid var(--line);min-width:180px;overflow:hidden;z-index:30;}
+  .menuDropdown button{display:flex;align-items:center;gap:10px;width:100%;background:#fff;border:none;text-align:left;padding:13px 14px;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;}
+  .menuDropdown button:not(:last-child){border-bottom:1px solid var(--line);}
+  .menuDropdown button:active{background:var(--purple-light);}
+  .menuDropdown .menuIc{font-size:16px;width:18px;text-align:center;flex-shrink:0;}
+
+  .modalOverlay{position:fixed;inset:0;background:rgba(35,27,51,.45);z-index:40;display:flex;justify-content:center;align-items:flex-end;}
+  .modalBox{background:var(--bg);width:100%;max-width:520px;max-height:88vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden;}
+  .modalHead{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:linear-gradient(135deg,var(--purple),var(--purple-dark));color:#fff;flex-shrink:0;}
+  .modalHead .modalTitle{font-size:16.5px;font-weight:800;}
+  .modalCloseBtn{background:rgba(255,255,255,.18);border:none;color:#fff;width:30px;height:30px;border-radius:8px;font-size:16px;cursor:pointer;line-height:1;}
+  .modalBody{padding:16px 18px 26px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+
+  .manualBlock{margin-bottom:18px;}
+  .manualBlock:last-child{margin-bottom:0;}
+  .manualTabTitle{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;color:var(--purple-dark);margin-bottom:6px;}
+  .manualTabTitle .ic{font-size:17px;}
+  .manualText{font-size:13.5px;line-height:1.55;color:var(--ink);margin:0 0 6px;}
+  .manualText:last-child{margin-bottom:0;}
+  .manualList{margin:0 0 6px;padding-left:18px;font-size:13.5px;line-height:1.55;color:var(--ink);}
+  .manualList li{margin-bottom:4px;}
+  .manualTipCard{background:var(--purple-light);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.5;color:var(--purple-dark);margin-top:14px;}
+
+  .supportCard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;}
+  .supportRow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink);}
+  .supportRow:last-child{border-bottom:none;}
+  .supportIconWrap{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--purple-light);font-size:19px;}
+  .supportIconWrap.wa{background:#E7F7EE;}
+  .supportMid{flex:1;min-width:0;}
+  .supportLbl{font-size:11.5px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.3px;}
+  .supportVal{font-size:14.5px;font-weight:700;color:var(--ink);word-break:break-word;}
+  .supportNote{font-size:12.5px;line-height:1.55;color:var(--sub);margin-top:2px;}
   :focus-visible{outline:2px solid var(--purple);outline-offset:2px;}
 </style>
 </head>
@@ -211,7 +247,33 @@ let state = {
   laEntryDraft: {},
   laEditingEntry: null,
   laEditDraft: { amount:"", date:"" },
+  showMenu: false,
+  showManual: false,
+  showSupport: false,
 };
+
+function toggleMenu(){
+  state.showMenu = !state.showMenu;
+  render();
+}
+function openManual(){
+  state.showMenu = false;
+  state.showManual = true;
+  render();
+}
+function openSupport(){
+  state.showMenu = false;
+  state.showSupport = true;
+  render();
+}
+function closeManual(){
+  state.showManual = false;
+  render();
+}
+function closeSupport(){
+  state.showSupport = false;
+  render();
+}
 
 function persist(next){
   state.entries = next;
@@ -840,6 +902,17 @@ function render(){
         <span class="name">Notish</span>
         ${state.view==="day" ? '<span class="tagline">simply clever</span>' : ""}
       </div>
+      ${state.view==="day" ? `
+      <div class="topbarRight">
+        <button class="menuBtn" aria-label="Menu" onclick="toggleMenu()">&#9776;</button>
+        ${state.showMenu ? `
+        <div class="menuDropdown">
+          <button onclick="openManual()"><span class="menuIc">\ud83d\udcd6</span>User manual</button>
+          <button onclick="openSupport()"><span class="menuIc">\ud83d\udcac</span>Support</button>
+        </div>
+        ` : ""}
+      </div>
+      ` : ""}
     </div>
     ${state.saveError ? '<div class="errorBanner">Could not save. Your browser storage may be full or blocked.</div>' : ""}
     <div id="installBanner" class="installBanner">
@@ -854,6 +927,127 @@ function render(){
       <button class="tabbarItem ${state.view==='year'?'active':''}" onclick="setView('year')"><span class="ic">\ud83d\udcca</span>Year</button>
       <button class="tabbarItem ${state.view==='filter'?'active':''}" onclick="setView('filter')"><span class="ic">\ud83d\udd0d</span>Filter</button>
       <button class="tabbarItem ${state.view==='loans'?'active':''}" onclick="setView('loans')"><span class="ic">\ud83e\udd1d</span>Loans</button>
+    </div>
+    ${state.showManual ? renderManualModal() : ""}
+    ${state.showSupport ? renderSupportModal() : ""}
+  `;
+}
+
+function renderManualModal(){
+  return `
+    <div class="modalOverlay" onclick="if(event.target===this) closeManual()">
+      <div class="modalBox">
+        <div class="modalHead">
+          <span class="modalTitle">User manual</span>
+          <button class="modalCloseBtn" onclick="closeManual()">&#10005;</button>
+        </div>
+        <div class="modalBody">
+          <p class="manualText">Notish is a simple daily expense and earnings tracker. Every rupee you spend or earn gets logged against a date, so your Day, Inflow, Month, Year, Filter and Loans tabs always stay in sync automatically \u2014 you only ever enter data once. Here's how each tab works:</p>
+
+          <div class="manualBlock">
+            <div class="manualTabTitle"><span class="ic">\ud83d\udcdd</span>1. Day</div>
+            <p class="manualText">This is where you record your everyday spending.</p>
+            <ul class="manualList">
+              <li>Use <b>Prev / Next</b> or tap the date box to jump to any day.</li>
+              <li>Under "Add expense", type the amount, pick a category (Food, Fuel, Groceries, Bus fare, etc.), and optionally add a short note like "lunch" or "auto fare".</li>
+              <li>Tap <b>Add</b> to save the entry \u2014 it appears instantly in the Entries list below, newest first.</li>
+              <li>The purple band shows your total spend for that date, and the Breakdown chart shows how much went to each category.</li>
+              <li>Tap the \u2715 next to any entry to delete it.</li>
+            </ul>
+          </div>
+
+          <div class="manualBlock">
+            <div class="manualTabTitle"><span class="ic">\ud83d\udcb0</span>2. Inflow</div>
+            <p class="manualText">This tracks the money coming in and your running balance.</p>
+            <ul class="manualList">
+              <li><b>Opening balance</b> carries forward automatically from your previous day's closing balance.</li>
+              <li>Enter that day's earnings in the "Enter earnings" box \u2014 tap "Remove earnings" if you need to clear it.</li>
+              <li><b>Closing balance</b> = Opening balance + Earnings \u2212 that day's expenses (pulled from your Day tab entries automatically).</li>
+              <li>Scroll down for Daily, Monthly and Yearly Inflow charts, each with its own Prev/Next navigation.</li>
+            </ul>
+          </div>
+
+          <div class="manualBlock">
+            <div class="manualTabTitle"><span class="ic">\ud83d\udcc6</span>3. Month</div>
+            <p class="manualText">Gives you a bird's-eye view of one calendar month.</p>
+            <ul class="manualList">
+              <li>Use the arrows next to the month name to move between months.</li>
+              <li>The total for the whole month is shown at the top, with a category-wise breakdown below \u2014 built automatically from every entry you added on the Day tab.</li>
+            </ul>
+          </div>
+
+          <div class="manualBlock">
+            <div class="manualTabTitle"><span class="ic">\ud83d\udcca</span>4. Year</div>
+            <p class="manualText">Zooms out to a full year of spending.</p>
+            <ul class="manualList">
+              <li>Use the arrows to move between years.</li>
+              <li>See your total for the year, a month-by-month chart, and a category-wise breakdown for the whole year.</li>
+            </ul>
+          </div>
+
+          <div class="manualBlock">
+            <div class="manualTabTitle"><span class="ic">\ud83d\udd0d</span>5. Filter</div>
+            <p class="manualText">Use this to search and total up specific expenses.</p>
+            <ul class="manualList">
+              <li>Pick a category (or "All categories"), type a keyword to match against your notes (e.g. "lunch" or "cab"), and set a From/To date range.</li>
+              <li>Tap <b>Show total</b> to see the matching total and the full list of matching entries.</li>
+            </ul>
+          </div>
+
+          <div class="manualBlock">
+            <div class="manualTabTitle"><span class="ic">\ud83e\udd1d</span>6. Loans</div>
+            <p class="manualText">Keep track of money you've lent (Loans) or borrowed (Advances) outside your daily expenses.</p>
+            <ul class="manualList">
+              <li>Tap "New" under Loans or Advances, enter the person's name and the amounts with dates, then tap <b>Save</b> to create a record.</li>
+              <li>Each record card shows the running history and whether it's fully settled.</li>
+              <li>Tap the icons on a history row to edit or delete that entry.</li>
+            </ul>
+          </div>
+
+          <div class="manualTipCard">
+            <b>Tip for effective use:</b> Add expenses the moment you spend \u2014 it takes a few seconds and keeps your Month, Year and Filter reports accurate. Enter your daily earnings on the Inflow tab each day so your closing balance always reflects reality. Use short, consistent notes (e.g. "auto", "lunch") so Filter search works well later.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSupportModal(){
+  return `
+    <div class="modalOverlay" onclick="if(event.target===this) closeSupport()">
+      <div class="modalBox">
+        <div class="modalHead">
+          <span class="modalTitle">Support</span>
+          <button class="modalCloseBtn" onclick="closeSupport()">&#10005;</button>
+        </div>
+        <div class="modalBody">
+          <div class="supportCard">
+            <a class="supportRow" href="mailto:libasmoideen425@gmail.com">
+              <div class="supportIconWrap">\u2709\ufe0f</div>
+              <div class="supportMid">
+                <div class="supportLbl">Email</div>
+                <div class="supportVal">libasmoideen425@gmail.com</div>
+              </div>
+            </a>
+            <a class="supportRow" href="https://wa.me/918606640753" target="_blank" rel="noopener">
+              <div class="supportIconWrap wa">
+                <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 3C9.373 3 4 8.373 4 15c0 2.29.64 4.43 1.75 6.26L4 29l7.94-1.7A11.93 11.93 0 0 0 16 27c6.627 0 12-5.373 12-12S22.627 3 16 3z" fill="#25D366"/>
+                  <path d="M11.9 9.8c-.28-.62-.57-.63-.84-.64-.22-.01-.47-.01-.72-.01-.25 0-.65.09-.99.47-.34.38-1.3 1.27-1.3 3.1 0 1.83 1.33 3.6 1.51 3.85.19.25 2.58 4.13 6.37 5.63 3.15 1.24 3.79.99 4.47.93.68-.06 2.2-.9 2.51-1.77.31-.87.31-1.62.22-1.77-.09-.15-.34-.25-.72-.44-.37-.19-2.2-1.09-2.54-1.21-.34-.13-.59-.19-.84.19-.25.37-.96 1.21-1.18 1.46-.22.25-.43.28-.8.09-.37-.19-1.57-.58-3-1.85-1.11-.99-1.86-2.21-2.08-2.58-.22-.37-.02-.57.17-.76.17-.17.37-.44.56-.66.19-.22.25-.37.37-.62.12-.25.06-.47-.03-.66-.09-.19-.8-1.98-1.14-2.7z" fill="#fff"/>
+                </svg>
+              </div>
+              <div class="supportMid">
+                <div class="supportLbl">WhatsApp / Call</div>
+                <div class="supportVal">86066 40753</div>
+              </div>
+            </a>
+          </div>
+          <div class="supportCard">
+            <div class="supportNote">For any customization, please connect \u2014 we'll gladly make the changes for you.</div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
