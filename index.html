@@ -55,6 +55,22 @@
   .noteRow{margin-top:12px;}
   .addBtn{width:100%;margin-top:14px;padding:13px;border-radius:12px;border:none;background:var(--purple);color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;}
   .removeEarningsBtn{width:100%;margin-top:10px;padding:10px;border-radius:10px;border:1.5px solid var(--red);background:#fff;color:var(--red);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+  .pageTitle{font-size:20px;font-weight:800;color:var(--ink);}
+  .laSectionHead{display:flex;justify-content:space-between;align-items:center;}
+  .laCard{margin-bottom:12px;}
+  .laCardHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .laName{font-size:15px;font-weight:800;}
+  .settledBadge{display:inline-block;background:#E7F7EE;color:#1F9254;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;margin-bottom:10px;}
+  .laAddRow{display:flex;gap:10px;}
+  .laAddCol{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .laAddCol input[type=date]{font-size:12px;padding:8px;}
+  .laHistory{margin-top:12px;border-top:1px solid var(--line);padding-top:8px;}
+  .laHistoryRow{display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap;}
+  .laHistoryRow:last-child{border-bottom:none;}
+  .laHistoryText{flex:1;color:var(--ink);}
+  .iconBtn{background:transparent;border:none;color:var(--sub);font-size:14px;cursor:pointer;padding:0 4px;}
+  .laMiniBtn{padding:6px 10px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .laMiniBtnGhost{background:#fff;color:var(--sub);border:1.5px solid var(--line);}
   .addBtn:disabled{opacity:.45;}
   .formError{color:var(--red);font-size:12.5px;margin-top:8px;}
 
@@ -129,12 +145,15 @@ const CATEGORIES = [
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const STORAGE_KEY = "notish_entries_v1";
 const EARNINGS_STORAGE_KEY = "notish_earnings_v1";
+const LA_STORAGE_KEY = "notish_la_records_v1";
+const BLUE = "#2F6FED";
 
 function catInfo(key){ return CATEGORIES.find(c=>c.key===key) || CATEGORIES[CATEGORIES.length-1]; }
 function fmt(n){ return "\u20B9" + Number(n||0).toLocaleString("en-IN",{maximumFractionDigits:2}); }
 function todayStr(){ const d=new Date(); return d.toISOString().slice(0,10); }
 function monthLabel(y,m){ return new Date(y,m,1).toLocaleString("en-IN",{month:"long",year:"numeric"}); }
 function esc(s){ const d=document.createElement("div"); d.textContent=s||""; return d.innerHTML; }
+function genId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
 function loadEntries(){
   try{ const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : []; }
@@ -152,16 +171,27 @@ function saveEarnings(earnings){
   try{ localStorage.setItem(EARNINGS_STORAGE_KEY, JSON.stringify(earnings)); return true; }
   catch(e){ return false; }
 }
+function loadLaRecords(){
+  try{ const raw = localStorage.getItem(LA_STORAGE_KEY); return raw ? JSON.parse(raw) : []; }
+  catch(e){ return []; }
+}
+function saveLaRecords(list){
+  try{ localStorage.setItem(LA_STORAGE_KEY, JSON.stringify(list)); return true; }
+  catch(e){ return false; }
+}
 
 let state = {
   entries: loadEntries(),
   earnings: loadEarnings(),
+  laRecords: loadLaRecords(),
   view: "day",
   selectedDate: todayStr(),
-  summaryDate: todayStr(),
+  inflowDate: todayStr(),
   knownToday: todayStr(),
   monthCursor: (()=>{ const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })(),
   yearCursor: new Date().getFullYear(),
+  inflowMonthCursor: (()=>{ const d=new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })(),
+  inflowYearCursorForMonthly: new Date().getFullYear(),
   amount: "",
   category: null,
   note: "",
@@ -172,6 +202,15 @@ let state = {
   filterFrom: (()=>{ const d=new Date(); d.setDate(d.getDate()-6); return d.toISOString().slice(0,10); })(),
   filterTo: todayStr(),
   filterApplied: false,
+  laNewOpen: { loan:false, advance:false },
+  laNewDraft: {
+    loan: { name:"", amt2:"", date2: todayStr(), amt3:"", date3: todayStr() },
+    advance: { name:"", amt2:"", date2: todayStr(), amt3:"", date3: todayStr() },
+  },
+  laFormError: { loan:"", advance:"" },
+  laEntryDraft: {},
+  laEditingEntry: null,
+  laEditDraft: { amount:"", date:"" },
 };
 
 function persist(next){
@@ -200,13 +239,19 @@ function shiftDay(delta){
   render();
 }
 function jumpToDate(v){ state.selectedDate = v; render(); }
-function shiftSummaryDay(delta){
-  const d = new Date(state.summaryDate+"T00:00:00");
+function shiftInflowDay(delta){
+  const d = new Date(state.inflowDate+"T00:00:00");
   d.setDate(d.getDate()+delta);
-  state.summaryDate = d.toISOString().slice(0,10);
+  state.inflowDate = d.toISOString().slice(0,10);
   render();
 }
-function jumpSummaryDate(v){ state.summaryDate = v; render(); }
+function jumpInflowDate(v){ state.inflowDate = v; render(); }
+function shiftInflowMonthCursor(delta){
+  let m = state.inflowMonthCursor.m + delta, y = state.inflowMonthCursor.y;
+  if(m<0){ m=11; y-=1; } if(m>11){ m=0; y+=1; }
+  state.inflowMonthCursor = {y,m}; render();
+}
+function shiftInflowYearCursor(delta){ state.inflowYearCursorForMonthly += delta; render(); }
 function shiftMonth(delta){
   let m = state.monthCursor.m + delta, y = state.monthCursor.y;
   if(m<0){ m=11; y-=1; } if(m>11){ m=0; y+=1; }
@@ -219,7 +264,7 @@ function updateAmount(v){ state.amount = v; }
 function updateNote(v){ state.note = v; }
 function getEarningsNum(date){ return parseFloat(state.earnings[date]) || 0; }
 function updateEarnings(v){
-  state.earnings[state.summaryDate] = v;
+  state.earnings[state.inflowDate] = v;
   saveEarnings(state.earnings);
 }
 function removeEarnings(date){
@@ -228,11 +273,147 @@ function removeEarnings(date){
   render();
 }
 function getOpeningBalance(date){
-  let earn = 0;
-  Object.keys(state.earnings).forEach(d=>{ if(d < date) earn += getEarningsNum(d); });
+  const inflowBefore = getEventsTotal(d=>d<date);
   let exp = 0;
   state.entries.forEach(en=>{ if(en.date < date) exp += en.amount; });
-  return earn - exp;
+  return inflowBefore - exp;
+}
+
+// Net inflow (earnings + loan/advance flows) matching the given date predicate.
+// Loan received / advance received-back count as +; loan repaid / advance paid count as -.
+function getEventsTotal(dateMatches){
+  let total = 0;
+  Object.keys(state.earnings).forEach(d=>{ if(dateMatches(d)) total += getEarningsNum(d); });
+  state.laRecords.forEach(rec=>{
+    rec.history.forEach(h=>{
+      if(!dateMatches(h.date)) return;
+      if(rec.section === "loan"){
+        if(h.type === "received") total += h.amount;
+        else if(h.type === "repaid") total -= h.amount;
+      } else if(rec.section === "advance"){
+        if(h.type === "received") total += h.amount;
+        else if(h.type === "paid") total -= h.amount;
+      }
+    });
+  });
+  return total;
+}
+
+function getDailyInflowForMonth(y,m){
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const prefix = y + "-" + String(m+1).padStart(2,"0");
+  const arr = [];
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = prefix + "-" + String(d).padStart(2,"0");
+    const val = getEventsTotal(dt=>dt===dateStr);
+    if(val !== 0) arr.push({name:String(d), value: val});
+  }
+  return arr;
+}
+function getMonthlyInflowForYear(y){
+  const totals = Array(12).fill(0);
+  const yStr = String(y);
+  Object.keys(state.earnings).forEach(d=>{ if(d.startsWith(yStr)){ const idx=parseInt(d.slice(5,7),10)-1; totals[idx]+=getEarningsNum(d); } });
+  state.laRecords.forEach(rec=>{
+    rec.history.forEach(h=>{
+      if(!h.date.startsWith(yStr)) return;
+      const idx = parseInt(h.date.slice(5,7),10)-1;
+      if(rec.section === "loan"){
+        if(h.type==="received") totals[idx]+=h.amount; else if(h.type==="repaid") totals[idx]-=h.amount;
+      } else if(rec.section === "advance"){
+        if(h.type==="received") totals[idx]+=h.amount; else if(h.type==="paid") totals[idx]-=h.amount;
+      }
+    });
+  });
+  return totals.map((v,i)=>({name:MONTH_SHORT[i], value:Math.round(v)}));
+}
+function getYearlyInflowTotals(){
+  const map = {};
+  Object.keys(state.earnings).forEach(d=>{ const y=d.slice(0,4); map[y]=(map[y]||0)+getEarningsNum(d); });
+  state.laRecords.forEach(rec=>{
+    rec.history.forEach(h=>{
+      const y = h.date.slice(0,4);
+      let delta = 0;
+      if(rec.section === "loan"){ delta = h.type==="received" ? h.amount : (h.type==="repaid" ? -h.amount : 0); }
+      else if(rec.section === "advance"){ delta = h.type==="received" ? h.amount : (h.type==="paid" ? -h.amount : 0); }
+      map[y] = (map[y]||0) + delta;
+    });
+  });
+  return Object.keys(map).sort().map(y=>({name:y, value:Math.round(map[y])}));
+}
+
+// ---- Loans & Advances ----
+function toggleLaNew(section){ state.laNewOpen[section] = !state.laNewOpen[section]; state.laFormError[section]=""; render(); }
+function updateLaNewField(section, field, v){ state.laNewDraft[section][field] = v; }
+function createLaRecord(section){
+  const d = state.laNewDraft[section];
+  const name = (d.name||"").trim();
+  const amt2 = parseFloat(d.amt2) || 0;
+  const amt3 = parseFloat(d.amt3) || 0;
+  if(!name){ state.laFormError[section] = "Enter a name."; render(); return; }
+  if(amt2<=0 && amt3<=0){ state.laFormError[section] = "Enter an amount in at least one box."; render(); return; }
+  const history = [];
+  if(amt2>0) history.push({ id: genId(), type: section==="loan" ? "received" : "paid", amount: amt2, date: d.date2 || todayStr() });
+  if(amt3>0) history.push({ id: genId(), type: section==="loan" ? "repaid" : "received", amount: amt3, date: d.date3 || todayStr() });
+  const rec = { id: genId(), section, name, history };
+  state.laRecords = [rec, ...state.laRecords];
+  saveLaRecords(state.laRecords);
+  state.laNewDraft[section] = { name:"", amt2:"", date2: todayStr(), amt3:"", date3: todayStr() };
+  state.laNewOpen[section] = false;
+  state.laFormError[section] = "";
+  render();
+}
+function updateLaEntryDraftField(recordId, field, v){
+  if(!state.laEntryDraft[recordId]) state.laEntryDraft[recordId] = { amt2:"", date2: todayStr(), amt3:"", date3: todayStr() };
+  state.laEntryDraft[recordId][field] = v;
+}
+function addLaTransaction(recordId){
+  const rec = state.laRecords.find(r=>r.id===recordId);
+  if(!rec) return;
+  const draft = state.laEntryDraft[recordId] || {};
+  const amt2 = parseFloat(draft.amt2) || 0;
+  const amt3 = parseFloat(draft.amt3) || 0;
+  if(amt2<=0 && amt3<=0) return;
+  if(amt2>0) rec.history.unshift({ id: genId(), type: rec.section==="loan" ? "received" : "paid", amount: amt2, date: draft.date2 || todayStr() });
+  if(amt3>0) rec.history.unshift({ id: genId(), type: rec.section==="loan" ? "repaid" : "received", amount: amt3, date: draft.date3 || todayStr() });
+  state.laEntryDraft[recordId] = { amt2:"", date2: todayStr(), amt3:"", date3: todayStr() };
+  saveLaRecords(state.laRecords);
+  render();
+}
+function deleteLaRecord(id){
+  state.laRecords = state.laRecords.filter(r=>r.id!==id);
+  saveLaRecords(state.laRecords);
+  render();
+}
+function deleteLaEntry(recordId, entryId){
+  const rec = state.laRecords.find(r=>r.id===recordId);
+  if(!rec) return;
+  rec.history = rec.history.filter(h=>h.id!==entryId);
+  saveLaRecords(state.laRecords);
+  render();
+}
+function startEditLaEntry(recordId, entryId){
+  const rec = state.laRecords.find(r=>r.id===recordId);
+  const entry = rec && rec.history.find(h=>h.id===entryId);
+  if(!entry) return;
+  state.laEditingEntry = { recordId, entryId };
+  state.laEditDraft = { amount: String(entry.amount), date: entry.date };
+  render();
+}
+function cancelEditLaEntry(){ state.laEditingEntry = null; render(); }
+function saveEditLaEntry(){
+  const info = state.laEditingEntry;
+  if(!info) return;
+  const rec = state.laRecords.find(r=>r.id===info.recordId);
+  const entry = rec && rec.history.find(h=>h.id===info.entryId);
+  if(!entry) return;
+  const amt = parseFloat(state.laEditDraft.amount);
+  if(!amt || amt<=0) return;
+  entry.amount = amt;
+  entry.date = state.laEditDraft.date || entry.date;
+  state.laEditingEntry = null;
+  saveLaRecords(state.laRecords);
+  render();
 }
 
 function getDayEntries(){ return state.entries.filter(en=>en.date===state.selectedDate).sort((a,b)=> a.id<b.id?1:-1); }
@@ -329,6 +510,112 @@ function renderAddForm(){
   `;
 }
 
+function laRecordTotals(rec){
+  let a=0, b=0;
+  rec.history.forEach(h=>{
+    if(rec.section === "loan"){
+      if(h.type==="received") a+=h.amount; else if(h.type==="repaid") b+=h.amount;
+    } else {
+      if(h.type==="paid") a+=h.amount; else if(h.type==="received") b+=h.amount;
+    }
+  });
+  return {a,b};
+}
+
+function renderLaHistory(rec){
+  if(rec.history.length===0) return '<div class="empty">No entries yet.</div>';
+  const sorted = [...rec.history].sort((x,y)=> x.date<y.date?1:(x.date>y.date?-1:0));
+  return sorted.map(h=>{
+    const isEditing = state.laEditingEntry && state.laEditingEntry.recordId===rec.id && state.laEditingEntry.entryId===h.id;
+    const label = rec.section === "loan" ? (h.type==="received" ? "Received" : "Repaid") : (h.type==="paid" ? "Paid" : "Received back");
+    const dateLabel = new Date(h.date+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+    if(isEditing){
+      return `
+      <div class="laHistoryRow laEditingRow">
+        <input type="number" inputmode="decimal" step="0.01" min="0" value="${esc(state.laEditDraft.amount)}" oninput="state.laEditDraft.amount=this.value" style="width:90px;">
+        <input type="date" value="${state.laEditDraft.date}" onchange="state.laEditDraft.date=this.value" style="width:132px;">
+        <button class="laMiniBtn" onclick="saveEditLaEntry()">Save</button>
+        <button class="laMiniBtn laMiniBtnGhost" onclick="cancelEditLaEntry()">Cancel</button>
+      </div>`;
+    }
+    return `
+      <div class="laHistoryRow">
+        <span class="laHistoryText">${label} ${fmt(h.amount)} on ${dateLabel}</span>
+        <button class="iconBtn" onclick="startEditLaEntry('${rec.id}','${h.id}')" aria-label="Edit entry">&#9998;</button>
+        <button class="deleteBtn" onclick="deleteLaEntry('${rec.id}','${h.id}')" aria-label="Delete entry">&times;</button>
+      </div>`;
+  }).join("");
+}
+
+function renderLaRecordCard(rec){
+  const {a,b} = laRecordTotals(rec);
+  const settled = a>0 && a===b;
+  const draft = state.laEntryDraft[rec.id] || { amt2:"", date2: todayStr(), amt3:"", date3: todayStr() };
+  const box2Label = rec.section==="loan" ? "Amount received" : "Amount paid (advance)";
+  const box3Label = rec.section==="loan" ? "Amount repaid" : "Amount received back";
+  return `
+    <div class="card laCard">
+      <div class="laCardHead">
+        <span class="laName">${esc(rec.name)}</span>
+        <button class="deleteBtn" onclick="deleteLaRecord('${rec.id}')" aria-label="Delete record">&times;</button>
+      </div>
+      ${settled ? '<div class="settledBadge">Amount settled</div>' : ""}
+      <div class="laAddRow">
+        <div class="laAddCol">
+          <div class="amountHint">${box2Label.toUpperCase()}</div>
+          <input type="number" inputmode="decimal" placeholder="0" step="0.01" min="0" value="${esc(draft.amt2)}" oninput="updateLaEntryDraftField('${rec.id}','amt2',this.value)">
+          <input type="date" value="${draft.date2}" onchange="updateLaEntryDraftField('${rec.id}','date2',this.value)">
+        </div>
+        <div class="laAddCol">
+          <div class="amountHint">${box3Label.toUpperCase()}</div>
+          <input type="number" inputmode="decimal" placeholder="0" step="0.01" min="0" value="${esc(draft.amt3)}" oninput="updateLaEntryDraftField('${rec.id}','amt3',this.value)">
+          <input type="date" value="${draft.date3}" onchange="updateLaEntryDraftField('${rec.id}','date3',this.value)">
+        </div>
+      </div>
+      <button class="addBtn" style="margin-top:10px;" onclick="addLaTransaction('${rec.id}')">Add</button>
+      <div class="laHistory">${renderLaHistory(rec)}</div>
+    </div>
+  `;
+}
+
+function renderLaSection(section){
+  const title = section === "loan" ? "Loan" : "Advance";
+  const records = state.laRecords.filter(r=>r.section===section);
+  const isOpen = state.laNewOpen[section];
+  const draft = state.laNewDraft[section];
+  const box2Label = section==="loan" ? "Amount received (loan)" : "Amount paid (advance)";
+  const box3Label = section==="loan" ? "Amount repaid" : "Amount received back";
+  return `
+    <div class="section">
+      <div class="sectionTitle laSectionHead">
+        <span>${title}</span>
+        <button class="navBtn" onclick="toggleLaNew('${section}')">${isOpen ? "Cancel" : "+ Add"}</button>
+      </div>
+      ${isOpen ? `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="amountHint">NAME</div>
+        <input type="text" placeholder="Enter name" value="${esc(draft.name)}" oninput="updateLaNewField('${section}','name',this.value)">
+        <div class="laAddRow" style="margin-top:12px;">
+          <div class="laAddCol">
+            <div class="amountHint">${box2Label.toUpperCase()}</div>
+            <input type="number" inputmode="decimal" placeholder="0" step="0.01" min="0" value="${esc(draft.amt2)}" oninput="updateLaNewField('${section}','amt2',this.value)">
+            <input type="date" value="${draft.date2}" onchange="updateLaNewField('${section}','date2',this.value)">
+          </div>
+          <div class="laAddCol">
+            <div class="amountHint">${box3Label.toUpperCase()}</div>
+            <input type="number" inputmode="decimal" placeholder="0" step="0.01" min="0" value="${esc(draft.amt3)}" oninput="updateLaNewField('${section}','amt3',this.value)">
+            <input type="date" value="${draft.date3}" onchange="updateLaNewField('${section}','date3',this.value)">
+          </div>
+        </div>
+        ${state.laFormError[section] ? `<div class="formError">${esc(state.laFormError[section])}</div>` : ""}
+        <button class="addBtn" onclick="createLaRecord('${section}')">Save</button>
+      </div>
+      ` : ""}
+      ${records.length===0 ? '<div class="card"><div class="empty">No records yet.</div></div>' : records.map(renderLaRecordCard).join("")}
+    </div>
+  `;
+}
+
 function render(){
   const app = document.getElementById("app");
   const dayEntries = getDayEntries();
@@ -352,14 +639,6 @@ function render(){
   if(state.view === "day"){
     content = `
       <div class="section">
-        <div class="sectionTitle">Add expense</div>
-        ${renderAddForm()}
-      </div>
-      <div class="totalBand" style="margin-top:18px;">
-        <div class="totalLabel"><span>${isToday ? "Today \u2014 " : ""}${dayDateLabel}</span></div>
-        <div class="totalNumber">${fmt(dayTotal)}</div>
-      </div>
-      <div class="section">
         <div class="dateNav">
           <button class="navBtn" onclick="shiftDay(-1)">&#8249; Prev</button>
           <div class="navCenter">
@@ -367,6 +646,14 @@ function render(){
           </div>
           <button class="navBtn" onclick="shiftDay(1)">Next &#8250;</button>
         </div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Add expense</div>
+        ${renderAddForm()}
+      </div>
+      <div class="totalBand" style="margin-top:18px;">
+        <div class="totalLabel"><span>${isToday ? "Today \u2014 " : ""}${dayDateLabel}</span></div>
+        <div class="totalNumber">${fmt(dayTotal)}</div>
       </div>
       <div class="section">
         <div class="sectionTitle">Entries</div>
@@ -378,41 +665,53 @@ function render(){
         <div class="card">${renderBarChart(dayCat, undefined, dayTotal)}</div>
       </div>` : ""}
     `;
-  } else if(state.view === "summary"){
-    const summaryD = state.summaryDate;
-    const openingBalance = getOpeningBalance(summaryD);
-    const summaryEarningsRaw = state.earnings[summaryD] || "";
-    const summaryEntries = state.entries.filter(en=>en.date===summaryD);
-    const summaryExpenseTotal = summaryEntries.reduce((s,en)=>s+en.amount,0);
-    const closingBalance = openingBalance + getEarningsNum(summaryD) - summaryExpenseTotal;
-    const summaryIsToday = summaryD === todayStr();
-    const summaryDateLabel = new Date(summaryD+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+  } else if(state.view === "inflow"){
+    const inflowD = state.inflowDate;
+    const openingBalance = getOpeningBalance(inflowD);
+    const inflowEarningsRaw = state.earnings[inflowD] || "";
+    const inflowExpenseEntries = state.entries.filter(en=>en.date===inflowD);
+    const inflowExpenseTotal = inflowExpenseEntries.reduce((s,en)=>s+en.amount,0);
+    const inflowTotalForDate = getEventsTotal(d=>d===inflowD);
+    const closingBalance = openingBalance + inflowTotalForDate - inflowExpenseTotal;
+    const inflowIsToday = inflowD === todayStr();
+    const inflowDateLabel = new Date(inflowD+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+
+    const dailyInflowData = getDailyInflowForMonth(state.inflowMonthCursor.y, state.inflowMonthCursor.m);
+    const dailyInflowTotal = dailyInflowData.reduce((s,d)=>s+d.value,0);
+    const monthlyInflowData = getMonthlyInflowForYear(state.inflowYearCursorForMonthly);
+    const monthlyInflowTotal = monthlyInflowData.reduce((s,d)=>s+d.value,0);
+    const yearlyInflowData = getYearlyInflowTotals();
+    const yearlyInflowTotal = yearlyInflowData.reduce((s,d)=>s+d.value,0);
+
     content = `
       <div class="section">
+        <div class="pageTitle">Earnings</div>
+      </div>
+      <div class="section">
         <div class="dateNav">
-          <button class="navBtn" onclick="shiftSummaryDay(-1)">&#8249; Prev</button>
+          <button class="navBtn" onclick="shiftInflowDay(-1)">&#8249; Prev</button>
           <div class="navCenter">
-            <input type="date" class="jumpDate" value="${summaryD}" onchange="jumpSummaryDate(this.value)" style="border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);text-decoration:none;">
+            <input type="date" class="jumpDate" value="${inflowD}" onchange="jumpInflowDate(this.value)" style="border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);text-decoration:none;">
           </div>
-          <button class="navBtn" onclick="shiftSummaryDay(1)">Next &#8250;</button>
+          <button class="navBtn" onclick="shiftInflowDay(1)">Next &#8250;</button>
         </div>
       </div>
       <div class="section">
-        <div class="sectionTitle">Opening Balance ${summaryIsToday ? "" : "\u2014 " + esc(summaryDateLabel)}</div>
+        <div class="sectionTitle">Opening Balance ${inflowIsToday ? "" : "\u2014 " + esc(inflowDateLabel)}</div>
         <div class="totalBand">
           <div class="totalNumber">${fmt(openingBalance)}</div>
         </div>
       </div>
       <div class="section">
-        <div class="sectionTitle">${summaryIsToday ? "Today's" : esc(summaryDateLabel) + "\u2019s"} Earnings</div>
+        <div class="sectionTitle">${inflowIsToday ? "Today's" : esc(inflowDateLabel) + "\u2019s"} Earnings</div>
         <div class="card">
           <div class="amountHint">ENTER EARNINGS</div>
           <div class="amountRow">
             <span class="rupee">\u20B9</span>
-            <input type="number" inputmode="decimal" placeholder="0" id="earningsInput" step="0.01" min="0" value="${esc(summaryEarningsRaw)}" oninput="updateEarnings(this.value)" onchange="render()">
+            <input type="number" inputmode="decimal" placeholder="0" id="earningsInput" step="0.01" min="0" value="${esc(inflowEarningsRaw)}" oninput="updateEarnings(this.value)" onchange="render()">
           </div>
-          ${(summaryD in state.earnings && state.earnings[summaryD] !== "") ? `
-          <button type="button" class="removeEarningsBtn" onclick="removeEarnings('${summaryD}')">Remove earnings for this date</button>
+          ${(inflowD in state.earnings && state.earnings[inflowD] !== "") ? `
+          <button type="button" class="removeEarningsBtn" onclick="removeEarnings('${inflowD}')">Remove earnings for this date</button>
           ` : ""}
         </div>
       </div>
@@ -421,6 +720,28 @@ function render(){
         <div class="totalBand">
           <div class="totalNumber">${fmt(closingBalance)}</div>
         </div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Daily Inflows</div>
+        <div class="dateNav" style="margin-bottom:8px;">
+          <button class="navBtn" onclick="shiftInflowMonthCursor(-1)">&#8249;</button>
+          <div class="navCenter"><span class="navCenterLabel">${monthLabel(state.inflowMonthCursor.y, state.inflowMonthCursor.m)}</span></div>
+          <button class="navBtn" onclick="shiftInflowMonthCursor(1)">&#8250;</button>
+        </div>
+        <div class="card">${renderBarChart(dailyInflowData, BLUE, dailyInflowTotal)}</div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Monthly Inflows</div>
+        <div class="dateNav" style="margin-bottom:8px;">
+          <button class="navBtn" onclick="shiftInflowYearCursor(-1)">&#8249;</button>
+          <div class="navCenter"><span class="navCenterLabel">${state.inflowYearCursorForMonthly}</span></div>
+          <button class="navBtn" onclick="shiftInflowYearCursor(1)">&#8250;</button>
+        </div>
+        <div class="card">${renderBarChart(monthlyInflowData, BLUE, monthlyInflowTotal)}</div>
+      </div>
+      <div class="section">
+        <div class="sectionTitle">Yearly Inflows</div>
+        <div class="card">${renderBarChart(yearlyInflowData, BLUE, yearlyInflowTotal)}</div>
       </div>
     `;
   } else if(state.view === "month"){
@@ -456,6 +777,14 @@ function render(){
         <div class="sectionTitle">By category</div>
         <div class="card">${renderBarChart(yearCat, undefined, yearTotal)}</div>
       </div>
+    `;
+  } else if(state.view === "loans"){
+    content = `
+      <div class="section">
+        <div class="pageTitle">Loans &amp; Advances</div>
+      </div>
+      ${renderLaSection('loan')}
+      ${renderLaSection('advance')}
     `;
   } else if(state.view === "filter"){
     const results = state.filterApplied ? getFilteredEntries() : [];
@@ -520,10 +849,11 @@ function render(){
     ${content}
     <div class="tabbar">
       <button class="tabbarItem ${state.view==='day'?'active':''}" onclick="setView('day')"><span class="ic">\ud83d\udcdd</span>Day</button>
-      <button class="tabbarItem ${state.view==='summary'?'active':''}" onclick="setView('summary')"><span class="ic">\ud83d\udcb0</span>Summary</button>
+      <button class="tabbarItem ${state.view==='inflow'?'active':''}" onclick="setView('inflow')"><span class="ic">\ud83d\udcb0</span>Inflow</button>
       <button class="tabbarItem ${state.view==='month'?'active':''}" onclick="setView('month')"><span class="ic">\ud83d\udcc6</span>Month</button>
       <button class="tabbarItem ${state.view==='year'?'active':''}" onclick="setView('year')"><span class="ic">\ud83d\udcca</span>Year</button>
       <button class="tabbarItem ${state.view==='filter'?'active':''}" onclick="setView('filter')"><span class="ic">\ud83d\udd0d</span>Filter</button>
+      <button class="tabbarItem ${state.view==='loans'?'active':''}" onclick="setView('loans')"><span class="ic">\ud83e\udd1d</span>Loans</button>
     </div>
   `;
 }
