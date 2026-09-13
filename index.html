@@ -68,6 +68,8 @@
   .laHistoryRow{display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap;}
   .laHistoryRow:last-child{border-bottom:none;}
   .laHistoryText{flex:1;color:var(--ink);}
+  .laBalanceChip{font-size:11px;font-weight:700;color:var(--purple-dark);background:var(--purple-light);padding:3px 8px;border-radius:20px;white-space:nowrap;}
+  .laCurrentBalance{font-size:13px;font-weight:700;color:var(--purple-dark);background:var(--purple-light);padding:6px 10px;border-radius:10px;margin-bottom:10px;display:inline-block;}
   .iconBtn{background:transparent;border:none;color:var(--sub);font-size:14px;cursor:pointer;padding:0 4px;}
   .laMiniBtn{padding:6px 10px;border-radius:8px;border:none;background:var(--purple);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
   .laMiniBtnGhost{background:#fff;color:var(--sub);border:1.5px solid var(--line);}
@@ -361,13 +363,21 @@ function getEventsTotal(dateMatches){
   return total;
 }
 
+// Earnings-only totals (used for the Inflow tab bar charts — these should move only with
+// the amounts entered in "Enter earnings", not with loan/advance activity).
+function getEarningsTotal(dateMatches){
+  let total = 0;
+  Object.keys(state.earnings).forEach(d=>{ if(dateMatches(d)) total += getEarningsNum(d); });
+  return total;
+}
+
 function getDailyInflowForMonth(y,m){
   const daysInMonth = new Date(y,m+1,0).getDate();
   const prefix = y + "-" + String(m+1).padStart(2,"0");
   const arr = [];
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = prefix + "-" + String(d).padStart(2,"0");
-    const val = getEventsTotal(dt=>dt===dateStr);
+    const val = getEarningsTotal(dt=>dt===dateStr);
     if(val !== 0) arr.push({name:String(d), value: val});
   }
   return arr;
@@ -376,31 +386,11 @@ function getMonthlyInflowForYear(y){
   const totals = Array(12).fill(0);
   const yStr = String(y);
   Object.keys(state.earnings).forEach(d=>{ if(d.startsWith(yStr)){ const idx=parseInt(d.slice(5,7),10)-1; totals[idx]+=getEarningsNum(d); } });
-  state.laRecords.forEach(rec=>{
-    rec.history.forEach(h=>{
-      if(!h.date.startsWith(yStr)) return;
-      const idx = parseInt(h.date.slice(5,7),10)-1;
-      if(rec.section === "loan"){
-        if(h.type==="received") totals[idx]+=h.amount; else if(h.type==="repaid") totals[idx]-=h.amount;
-      } else if(rec.section === "advance"){
-        if(h.type==="received") totals[idx]+=h.amount; else if(h.type==="paid") totals[idx]-=h.amount;
-      }
-    });
-  });
   return totals.map((v,i)=>({name:MONTH_SHORT[i], value:Math.round(v)}));
 }
 function getYearlyInflowTotals(){
   const map = {};
   Object.keys(state.earnings).forEach(d=>{ const y=d.slice(0,4); map[y]=(map[y]||0)+getEarningsNum(d); });
-  state.laRecords.forEach(rec=>{
-    rec.history.forEach(h=>{
-      const y = h.date.slice(0,4);
-      let delta = 0;
-      if(rec.section === "loan"){ delta = h.type==="received" ? h.amount : (h.type==="repaid" ? -h.amount : 0); }
-      else if(rec.section === "advance"){ delta = h.type==="received" ? h.amount : (h.type==="paid" ? -h.amount : 0); }
-      map[y] = (map[y]||0) + delta;
-    });
-  });
   return Object.keys(map).sort().map(y=>({name:y, value:Math.round(map[y])}));
 }
 
@@ -584,9 +574,25 @@ function laRecordTotals(rec){
   return {a,b};
 }
 
+// Attaches a running "balance so far" to each history entry (in chronological order),
+// then returns the list newest-first for display.
+function laHistoryWithBalance(rec){
+  const chronological = [...rec.history].sort((x,y)=> x.date<y.date?-1:(x.date>y.date?1:(x.id<y.id?-1:1)));
+  let running = 0;
+  const withBalance = chronological.map(h=>{
+    if(rec.section === "loan"){
+      if(h.type==="received") running += h.amount; else if(h.type==="repaid") running -= h.amount;
+    } else {
+      if(h.type==="paid") running += h.amount; else if(h.type==="received") running -= h.amount;
+    }
+    return Object.assign({}, h, { balanceAfter: running });
+  });
+  return withBalance.sort((x,y)=> x.date<y.date?1:(x.date>y.date?-1:(x.id<y.id?1:-1)));
+}
+
 function renderLaHistory(rec){
   if(rec.history.length===0) return '<div class="empty">No entries yet.</div>';
-  const sorted = [...rec.history].sort((x,y)=> x.date<y.date?1:(x.date>y.date?-1:0));
+  const sorted = laHistoryWithBalance(rec);
   return sorted.map(h=>{
     const isEditing = state.laEditingEntry && state.laEditingEntry.recordId===rec.id && state.laEditingEntry.entryId===h.id;
     const label = rec.section === "loan" ? (h.type==="received" ? "Received" : "Repaid") : (h.type==="paid" ? "Paid" : "Received back");
@@ -603,6 +609,7 @@ function renderLaHistory(rec){
     return `
       <div class="laHistoryRow">
         <span class="laHistoryText">${label} ${fmt(h.amount)} on ${dateLabel}</span>
+        <span class="laBalanceChip">Balance ${fmt(h.balanceAfter)}</span>
         <button class="iconBtn" onclick="startEditLaEntry('${rec.id}','${h.id}')" aria-label="Edit entry">&#9998;</button>
         <button class="deleteBtn" onclick="deleteLaEntry('${rec.id}','${h.id}')" aria-label="Delete entry">&times;</button>
       </div>`;
@@ -612,6 +619,7 @@ function renderLaHistory(rec){
 function renderLaRecordCard(rec){
   const {a,b} = laRecordTotals(rec);
   const settled = a>0 && a===b;
+  const balance = a-b;
   const draft = state.laEntryDraft[rec.id] || { amt2:"", date2: todayStr(), amt3:"", date3: todayStr() };
   const box2Label = rec.section==="loan" ? "Amount received" : "Amount paid (advance)";
   const box3Label = rec.section==="loan" ? "Amount repaid" : "Amount received back";
@@ -621,7 +629,7 @@ function renderLaRecordCard(rec){
         <span class="laName">${esc(rec.name)}</span>
         <button class="deleteBtn" onclick="deleteLaRecord('${rec.id}')" aria-label="Delete record">&times;</button>
       </div>
-      ${settled ? '<div class="settledBadge">Amount settled</div>' : ""}
+      ${settled ? '<div class="settledBadge">Amount settled</div>' : (rec.history.length ? `<div class="laCurrentBalance">Balance ${fmt(balance)}</div>` : "")}
       <div class="laAddRow">
         <div class="laAddCol">
           <div class="amountHint">${box2Label.toUpperCase()}</div>
@@ -784,7 +792,7 @@ function render(){
         </div>
       </div>
       <div class="section">
-        <div class="sectionTitle">Daily Inflows</div>
+        <div class="sectionTitle">Daily Earnings</div>
         <div class="dateNav" style="margin-bottom:8px;">
           <button class="navBtn" onclick="shiftInflowMonthCursor(-1)">&#8249;</button>
           <div class="navCenter"><span class="navCenterLabel">${monthLabel(state.inflowMonthCursor.y, state.inflowMonthCursor.m)}</span></div>
@@ -793,7 +801,7 @@ function render(){
         <div class="card">${renderBarChart(dailyInflowData, BLUE, dailyInflowTotal)}</div>
       </div>
       <div class="section">
-        <div class="sectionTitle">Monthly Inflows</div>
+        <div class="sectionTitle">Monthly Earnings</div>
         <div class="dateNav" style="margin-bottom:8px;">
           <button class="navBtn" onclick="shiftInflowYearCursor(-1)">&#8249;</button>
           <div class="navCenter"><span class="navCenterLabel">${state.inflowYearCursorForMonthly}</span></div>
@@ -802,7 +810,7 @@ function render(){
         <div class="card">${renderBarChart(monthlyInflowData, BLUE, monthlyInflowTotal)}</div>
       </div>
       <div class="section">
-        <div class="sectionTitle">Yearly Inflows</div>
+        <div class="sectionTitle">Yearly Earnings</div>
         <div class="card">${renderBarChart(yearlyInflowData, BLUE, yearlyInflowTotal)}</div>
       </div>
     `;
@@ -962,8 +970,8 @@ function renderManualModal(){
             <ul class="manualList">
               <li><b>Opening balance</b> carries forward automatically from your previous day's closing balance.</li>
               <li>Enter that day's earnings in the "Enter earnings" box \u2014 tap "Remove earnings" if you need to clear it.</li>
-              <li><b>Closing balance</b> = Opening balance + Earnings \u2212 that day's expenses (pulled from your Day tab entries automatically).</li>
-              <li>Scroll down for Daily, Monthly and Yearly Inflow charts, each with its own Prev/Next navigation.</li>
+              <li><b>Closing balance</b> = Opening balance + Earnings \u2212 that day's expenses, adjusted for any loan or advance activity that day (see the Loans &amp; Advances section below).</li>
+              <li>Scroll down for Daily, Monthly and Yearly Earnings charts \u2014 these move only with the amounts you enter in "Enter earnings", not with loan or advance activity \u2014 each with its own Prev/Next navigation.</li>
             </ul>
           </div>
 
@@ -995,12 +1003,13 @@ function renderManualModal(){
           </div>
 
           <div class="manualBlock">
-            <div class="manualTabTitle"><span class="ic">\ud83e\udd1d</span>6. Loans</div>
-            <p class="manualText">Keep track of money you've lent (Loans) or borrowed (Advances) outside your daily expenses.</p>
+            <div class="manualTabTitle"><span class="ic">\ud83e\udd1d</span>6. Loans &amp; Advances</div>
+            <p class="manualText">Keep track of loans you've taken (money you received and need to repay) and advances you've given (money you paid out and expect to get back) \u2014 separate from your daily expenses.</p>
             <ul class="manualList">
               <li>Tap "New" under Loans or Advances, enter the person's name and the amounts with dates, then tap <b>Save</b> to create a record.</li>
-              <li>Each record card shows the running history and whether it's fully settled.</li>
+              <li>Each record card shows a current <b>Balance</b> figure, the running history with the balance after every entry, and whether it's fully settled.</li>
               <li>Tap the icons on a history row to edit or delete that entry.</li>
+              <li>Loan amount received is added to the closing balance in the Inflow tab, and advance amount given is deducted from the closing balance in the Inflow tab.</li>
             </ul>
           </div>
 
